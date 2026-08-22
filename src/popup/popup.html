@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skribbl AutoDraw</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="logo">
+        <span class="logo-icon">✏️</span>
+        <div class="logo-text">
+          <span class="logo-title">AutoDraw</span>
+          <span class="logo-sub">for Skribbl.io</span>
+        </div>
+      </div>
+      <div class="toggle-wrap">
+        <label class="toggle" id="label-enabled" title="Enable or disable AutoDraw">
+          <input type="checkbox" id="toggle-enabled" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </header>
+
+    <!-- Status Banner -->
+    <div class="status-banner" id="status-banner">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="status-text" id="status-text">Idle</span>
+      <span class="status-word" id="status-word"></span>
+    </div>
+
+    <!-- Main Controls -->
+    <main class="popup-body" id="popup-body">
+
+      <!-- Speed Mode -->
+      <div class="control-group">
+        <label class="control-label" for="select-speed">
+          <span class="label-icon">⚡</span>
+          Drawing Speed
+        </label>
+        <div class="speed-buttons" id="speed-buttons" role="group" aria-label="Drawing speed">
+          <button class="speed-btn" id="speed-slow" data-speed="slow">Slow</button>
+          <button class="speed-btn active" id="speed-medium" data-speed="medium">Medium</button>
+          <button class="speed-btn" id="speed-fast" data-speed="fast">Fast</button>
+        </div>
+      </div>
+
+      <!-- Jitter Amount -->
+      <div class="control-group">
+        <label class="control-label" for="slider-jitter">
+          <span class="label-icon">✋</span>
+          Hand Tremor
+          <span class="jitter-value" id="jitter-value">1.0</span>
+        </label>
+        <input
+          type="range"
+          id="slider-jitter"
+          min="0"
+          max="3"
+          step="0.1"
+          value="1.0"
+          class="slider"
+        />
+        <div class="slider-labels">
+          <span>None</span>
+          <span>Natural</span>
+          <span>Heavy</span>
+        </div>
+      </div>
+
+      <!-- Auto-Start Toggle -->
+      <div class="control-row">
+        <div class="control-row-info">
+          <span class="label-icon">🚀</span>
+          <div>
+            <span class="control-row-title">Auto-Start</span>
+            <span class="control-row-sub">Draw immediately on word detection</span>
+          </div>
+        </div>
+        <label class="toggle" id="label-autostart" title="Auto-start drawing">
+          <input type="checkbox" id="toggle-autostart" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+    </main>
+
+    <!-- Footer Actions -->
+    <footer class="popup-footer">
+      <button class="btn-cancel" id="btn-cancel" disabled>
+        ✕ Cancel Drawing
+      </button>
+      <div class="footer-meta">
+        <span class="dict-size" id="dict-size">— words</span>
+      </div>
+    </footer>
+
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

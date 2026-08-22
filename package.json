@@ -1,0 +1,23 @@
+{
+  "name": "skribbl-autodraw",
+  "version": "1.0.0",
+  "description": "Chrome extension that draws on Skribbl.io automatically in a natural, human-like style using Google QuickDraw data.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": ["chrome-extension", "skribbl", "quickdraw", "autodraw"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}
