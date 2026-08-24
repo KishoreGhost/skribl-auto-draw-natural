@@ -140,17 +140,15 @@ function triggerDraw(): void {
 // ─── Drawing turn detection ───────────────────────────────────────────────────
 
 function isCurrentlyDrawingTurn(): boolean {
-  // Skribbl.io shows the full word (not dashes) in #currentWord when it's your turn to draw
-  const wordEl = document.getElementById('currentWord');
-  if (!wordEl) return false;
-
-  const text = wordEl.textContent?.trim() ?? '';
-  // If the text has no underscores/dashes and has actual letters, it's our turn
-  return text.length > 0 && !/[_\s]{2,}/.test(text) && /[a-zA-Z]/.test(text);
+  // Skribbl.io sets #game-word .description to "DRAW THIS" when it's your turn to draw
+  const descEl = document.querySelector('#game-word .description');
+  if (!descEl) return false;
+  return descEl.textContent?.trim().toUpperCase() === 'DRAW THIS';
 }
 
 function getCurrentWord(): string | null {
-  const wordEl = document.getElementById('currentWord');
+  // The full word is shown in #game-word .word only when you are the drawer
+  const wordEl = document.querySelector('#game-word .word');
   return wordEl?.textContent?.trim() ?? null;
 }
 
@@ -207,7 +205,9 @@ function onDrawingTurnEnd(): void {
 // ─── MutationObserver setup ───────────────────────────────────────────────────
 
 function setupObserver(): void {
-  const target = document.getElementById('game-wrapper') ?? document.body;
+  // Observe #game-word specifically — this is what changes when turn state updates
+  const wordContainer = document.getElementById('game-word');
+  const target = wordContainer ?? document.getElementById('game-wrapper') ?? document.body;
 
   _observer = new MutationObserver(() => {
     const nowDrawing = isCurrentlyDrawingTurn();

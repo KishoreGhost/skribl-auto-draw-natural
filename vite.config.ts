@@ -30,7 +30,7 @@ const manifest = defineManifest({
   },
   web_accessible_resources: [
     {
-      resources: ['src/injected/injected.ts'],
+      resources: ['injected/injected.js'],
       matches: ['https://skribbl.io/*'],
     },
   ],
@@ -48,6 +48,15 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: 'src/popup/popup.html',
+        injected: 'src/injected/injected.ts',
+      },
+      output: {
+        entryFileNames: (chunk) => {
+          if (chunk.name === 'injected') return 'injected/injected.js';
+          if (chunk.name === 'content') return 'assets/content.js';
+          return 'assets/[name].js';
+        },
+        chunkFileNames: 'assets/[name].js',
       },
     },
   },
