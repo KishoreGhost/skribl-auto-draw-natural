@@ -14,6 +14,7 @@
 
 import type { QuickDrawSketch, ExtensionSettings } from '../types/index';
 import { AnimationScheduler } from '../lib/scheduler';
+import { parseColor } from '../lib/color-engine';
 
 console.log('[SkribblAutoDraw] injected script ready');
 
@@ -27,6 +28,60 @@ function findCanvas(): HTMLCanvasElement | null {
   return AnimationScheduler.findCanvas();
 }
 
+// ─── Helper: select a color in Skribbl.io's palette ───────────────────────────
+
+/**
+ * Click the Skribbl.io color palette button matching `hex`.
+ * Skribbl.io renders palette swatches as `.color-item` (or similar) divs with a
+ * background-color. We find the one whose resolved color matches and click it.
+ */
+function selectColor(hex: string): void {
+  const target = parseColor(hex);
+  if (!target) return;
+
+  const candidates = document.querySelectorAll<HTMLElement>(
+    '.color-item, .colorItem, [class*="color"], .swatch, [data-color]'
+  );
+
+  for (const el of candidates) {
+    // Prefer an explicit data attribute
+    const dataColor = el.dataset?.color;
+    if (dataColor) {
+      const c = parseColor(dataColor);
+      if (c && c === target) {
+        el.click();
+        return;
+      }
+    }
+
+    const bg =
+      el.style.backgroundColor ||
+      (getComputedStyle(el).backgroundColor) ||
+      '';
+    const c = parseColor(bg);
+    if (c && c === target) {
+      el.click();
+      return;
+    }
+  }
+
+  // Fallback: walk elements within the drawing/canvas container only (bounded
+  // to avoid scanning the whole document on every stroke).
+  const canvas = findCanvas();
+  const scope = canvas?.parentElement?.parentElement ?? canvas?.parentElement ?? null;
+  if (scope) {
+    const allEls = scope.querySelectorAll<HTMLElement>('div, button, span');
+    for (const el of allEls) {
+      const bg = getComputedStyle(el).backgroundColor;
+      const c = parseColor(bg);
+      if (c && c === target) {
+        el.click();
+        return;
+      }
+    }
+  }
+}
+
 // ─── Helper: post back to content ─────────────────────────────────────────────
 
 function postToContent(message: unknown): void {
@@ -37,7 +92,8 @@ function postToContent(message: unknown): void {
 
 async function startDrawing(
   sketch: QuickDrawSketch,
-  settings: Pick<ExtensionSettings, 'speedMode' | 'jitterAmount'>
+  settings: Pick<ExtensionSettings, 'speedMode' | 'jitterAmount'>,
+  colors?: string[]
 ): Promise<void> {
   // Cancel any in-progress drawing
   if (_activeScheduler) {
@@ -96,7 +152,9 @@ async function startDrawing(
         });
         console.error(`[SkribblAutoDraw] Error: ${code} — ${message}`);
       },
-    }
+    },
+    colors,
+    selectColor
   );
 }
 
@@ -122,7 +180,8 @@ window.addEventListener('message', event => {
         return;
       }
 
-      startDrawing(sketch, settings);
+      const colors = Array.isArray(msg.colors) ? (msg.colors as string[]) : undefined;
+      startDrawing(sketch, settings, colors);
       break;
     }
 

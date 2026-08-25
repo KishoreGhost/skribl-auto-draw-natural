@@ -8,7 +8,11 @@ const manifest = defineManifest({
   version: '1.0.0',
   description: 'Automatically draws on Skribbl.io using natural, human-like strokes powered by Google QuickDraw.',
   permissions: ['storage'],
-  host_permissions: ['https://skribbl.io/*'],
+  host_permissions: [
+    'https://skribbl.io/*',
+    'https://storage.googleapis.com/*',
+    'https://api.iconify.design/*',
+  ],
   background: {
     service_worker: 'src/background/service-worker.ts',
     type: 'module',
@@ -30,7 +34,7 @@ const manifest = defineManifest({
   },
   web_accessible_resources: [
     {
-      resources: ['injected/injected.js'],
+      resources: ['injected/injected.js', 'assets/*.js'],
       matches: ['https://skribbl.io/*'],
     },
   ],
@@ -57,6 +61,9 @@ export default defineConfig({
           return 'assets/[name].js';
         },
         chunkFileNames: 'assets/[name].js',
+        // Inline all imports into injected.js so it has no external chunk deps
+        // that would be blocked by web_accessible_resources
+        manualChunks: undefined,
       },
     },
   },

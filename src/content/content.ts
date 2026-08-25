@@ -13,7 +13,10 @@ import type {
   ExtensionSettings,
   QuickDrawSketch,
 } from '../types/index';
-import { getSketch, hasWord, normalizeWord } from '../data/dictionary';
+import { getSketch } from '../data/dictionary';
+import { getStrokeColors } from '../lib/color-engine';
+import { textToStrokes } from '../lib/text-to-strokes';
+import { fetchIconSketch } from '../lib/icon-strokes';
 
 console.log('[SkribblAutoDraw] content script loaded');
 
@@ -22,6 +25,7 @@ console.log('[SkribblAutoDraw] content script loaded');
 let _injected = false;
 let _currentWord: string | null = null;
 let _currentSketch: QuickDrawSketch | null = null;
+let _currentColors: string[] | null = null;
 let _isDrawingTurn = false;
 let _overlayButton: HTMLButtonElement | null = null;
 let _settings: ExtensionSettings | null = null;
@@ -51,6 +55,35 @@ function injectMainWorldScript(): void {
   (document.head || document.documentElement).appendChild(script);
 
   console.log('[SkribblAutoDraw] injected script loaded');
+}
+
+// ─── Transient toast (explains why a word didn't draw) ─────────────────────────
+
+function showToast(message: string, kind: 'error' | 'info' = 'error'): void {
+  const el = document.createElement('div');
+  el.textContent = message;
+  Object.assign(el.style, {
+    position: 'fixed',
+    bottom: '24px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: '99999',
+    padding: '10px 16px',
+    background: kind === 'error' ? 'rgba(220, 38, 38, 0.95)' : 'rgba(40, 40, 60, 0.95)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '13px',
+    fontWeight: '600',
+    fontFamily: 'system-ui, sans-serif',
+    cursor: 'default',
+    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
+    userSelect: 'none',
+    maxWidth: '80vw',
+    textAlign: 'center',
+  } as CSSStyleDeclaration);
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
 }
 
 // ─── Overlay button ───────────────────────────────────────────────────────────
@@ -125,6 +158,7 @@ function triggerDraw(): void {
         speedMode: _settings.speedMode,
         jitterAmount: _settings.jitterAmount,
       },
+      colors: _currentColors ?? undefined,
     },
     '*'
   );
@@ -160,24 +194,61 @@ async function onDrawingTurnStart(): Promise<void> {
   if (!word) return;
 
   _currentWord = word;
-  const normalized = normalizeWord(word);
 
   console.log(`[SkribblAutoDraw] Drawing turn detected. Word: "${word}"`);
 
   // Notify background
   chrome.runtime.sendMessage({ type: 'WORD_DETECTED', word });
 
-  if (!hasWord(word)) {
-    console.log(`[SkribblAutoDraw] Word "${word}" not found in dictionary.`);
-    return;
-  }
+  // Report "fetching" status while we resolve drawing data (may hit network)
+  chrome.runtime.sendMessage({
+    type: 'DRAW_STATUS_UPDATE',
+    status: 'word_detected',
+    progress: 0,
+  });
 
-  // Load sketch
-  _currentSketch = getSketch(word, settings.variantIndex);
-  if (!_currentSketch) return;
+  // Try a real QuickDraw sketch; if none is available, fall back to writing
+  // the word itself as text so we never refuse to draw.
+  let sketch = await getSketch(word, settings.variantIndex);
+  let colors: string[] | undefined;
+
+  if (sketch) {
+    _currentSketch = sketch;
+    _currentColors = getStrokeColors(word, sketch.strokes.length);
+  } else {
+    // No QuickDraw data — try to draw a real image of the word via the Iconify
+    // API, then fall back to writing the word as text only if that fails.
+    console.log(`[SkribblAutoDraw] No sketch data for "${word}" — trying icon API...`);
+    let iconSketch: QuickDrawSketch | null = null;
+    try {
+      iconSketch = await fetchIconSketch(word);
+    } catch (err) {
+      console.error('[SkribblAutoDraw] Icon fallback failed:', err);
+    }
+
+    if (iconSketch && iconSketch.strokes.length > 0) {
+      sketch = iconSketch;
+      _currentSketch = sketch;
+      _currentColors = undefined; // icons are single-color; use current pen
+      showToast(`Drawing "${word}" from icon`, 'info');
+    } else {
+      console.log(`[SkribblAutoDraw] No icon found for "${word}" — writing as text.`);
+      sketch = textToStrokes(word);
+      _currentSketch = sketch;
+      _currentColors = undefined;
+      showToast(`Drawing "${word}" as text (no image found)`, 'info');
+    }
+  }
 
   // Ensure injected script is loaded
   injectMainWorldScript();
+
+  // Report sketch ready
+  chrome.runtime.sendMessage({
+    type: 'DRAW_STATUS_UPDATE',
+    status: 'sketch_loaded',
+    progress: 0,
+  });
 
   if (settings.autoStart) {
     // Short delay to let injected script initialize

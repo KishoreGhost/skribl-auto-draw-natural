@@ -172,6 +172,8 @@ export interface StatusResponse {
 // Content ↔ Background messages
 export type ContentToBackgroundMessage =
   | { type: 'WORD_DETECTED'; word: string }
+  | { type: 'FETCH_DRAWINGS'; category: string }
+  | { type: 'FETCH_ICON'; query: string }
   | { type: 'DRAW_STATUS_UPDATE'; status: DrawingStatus; progress: number };
 
 export type BackgroundToContentMessage =
@@ -183,6 +185,8 @@ export type ContentToInjectedMessage =
       type: 'SKRIBBL_AUTODRAW_START';
       sketch: QuickDrawSketch;
       settings: Pick<ExtensionSettings, 'speedMode' | 'jitterAmount'>;
+      /** Optional per-stroke hex colors (index-aligned with sketch.strokes) */
+      colors?: string[];
     }
   | { type: 'SKRIBBL_AUTODRAW_CANCEL' };
 
@@ -204,3 +208,62 @@ export type InjectedToContentMessage =
       code: 'CANVAS_NOT_FOUND' | 'NOT_YOUR_TURN' | 'DRAW_CANCELLED' | 'UNKNOWN';
       message: string;
     };
+
+// ─── QuickDraw Raw Data (from GCS ndjson) ─────────────────────────────────────
+
+/** Raw drawing record from Google Quick, Draw! simplified NDJSON */
+export interface QuickDrawRawDrawing {
+  /** The category/word */
+  word: string;
+  /** Country code of the drawer */
+  countrycode: string;
+  /** Whether Google's ML model recognized it */
+  recognized: boolean;
+  /** Unique key for this drawing */
+  key_id: string;
+  /** Stroke data: array of strokes, each stroke = [[x0,x1,...],[y0,y1,...]] */
+  drawing: number[][][];
+}
+
+// ─── Color System ─────────────────────────────────────────────────────────────
+
+/** Skribbl.io's 22-color palette hex values */
+export const SKRIBBL_PALETTE: string[] = [
+  '#000000', '#4c4c4c', '#c1c1c1', '#ffffff',
+  '#740b07', '#ef130b', '#c23800', '#ff7100',
+  '#ffe400', '#e8a200', '#005510', '#00cc00',
+  '#0e0865', '#231fd3', '#00569e', '#00b2ff',
+  '#550069', '#a300ba', '#a75574', '#d37caa',
+  '#63300d', '#a0522d',
+];
+
+/** Color assignment for a drawing — maps stroke indices to colors */
+export interface ColorAssignment {
+  /** Default color for all strokes */
+  primary: string;
+  /** Optional secondary color for detail strokes */
+  secondary?: string;
+  /** Optional accent color */
+  accent?: string;
+  /** Map of stroke index → hex color override */
+  strokeColors?: Record<number, string>;
+}
+
+/** Extended sketch data with color info for the injected script */
+export interface ColoredSketchData {
+  sketch: QuickDrawSketch;
+  colors: ColorAssignment;
+}
+
+// ─── Fetch/Cache ──────────────────────────────────────────────────────────────
+
+/** Cached drawing data stored in chrome.storage.local */
+export interface CachedWordData {
+  /** The word/category */
+  word: string;
+  /** Pre-converted sketches (top N best quality) */
+  sketches: QuickDrawSketch[];
+  /** Timestamp when cached */
+  cachedAt: number;
+}
+

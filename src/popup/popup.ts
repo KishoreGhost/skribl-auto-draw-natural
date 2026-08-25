@@ -76,7 +76,7 @@ function renderSettings(): void {
 
 const STATUS_LABELS: Record<DrawingStatus, string> = {
   idle: 'Idle',
-  word_detected: 'Word detected',
+  word_detected: 'Fetching drawing data…',
   sketch_loaded: 'Sketch ready',
   animating: 'Drawing…',
   complete: 'Complete!',
@@ -164,7 +164,7 @@ window.addEventListener('unload', stopStatusPolling);
 
 function renderDictSize(): void {
   const size = getDictionarySize();
-  dictSize.textContent = `${size} words`;
+  dictSize.textContent = `Any word · ${size} sketches`;
 }
 
 // ─── Initialize ───────────────────────────────────────────────

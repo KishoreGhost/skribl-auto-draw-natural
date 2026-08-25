@@ -13,8 +13,45 @@ import type {
   ExtensionSettings,
   DrawingStatus,
   StatusResponse,
+  QuickDrawSketch,
 } from '../types/index';
 import { DEFAULT_SETTINGS } from '../types/index';
+import { fetchDrawings } from '../data/quickdraw-fetcher';
+
+// ─── Iconify (fallback image) fetch ───────────────────────────────────────────
+// Used when a word has no QuickDraw sketch: fetch a real line-art icon for the
+// word and convert its SVG paths into strokes. Runs here (with host_permissions)
+// so it is exempt from CORS.
+
+interface IconifyIcon {
+  body: string;
+}
+
+async function fetchIcon(query: string): Promise<IconifyIcon | null> {
+  if (!query) return null;
+  const searchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(
+    query
+  )}&limit=1`;
+  const searchRes = await fetch(searchUrl);
+  if (!searchRes.ok) return null;
+  const search = (await searchRes.json()) as { icons?: string[] };
+  const icons = search.icons ?? [];
+  if (icons.length === 0) return null;
+
+  const iconId = icons[0]; // e.g. "mdi:cat"
+  // The Iconify *data* (.json) endpoint is unreliable (returns 404 for valid
+  // icons in many environments), but the *SVG* endpoint is stable. The search
+  // id uses a ":" separator that must be converted to "/" for the SVG URL:
+  //   "mdi:cat" -> "https://api.iconify.design/mdi/cat.svg"
+  const [prefix, name] = iconId.split(':');
+  if (!prefix || !name) return null;
+  const svgUrl = `https://api.iconify.design/${prefix}/${name}.svg`;
+  const dataRes = await fetch(svgUrl);
+  if (!dataRes.ok) return null;
+  const svg = await dataRes.text();
+  if (!svg || !svg.includes('<')) return null;
+  return { body: svg };
+}
 
 // ─── In-memory state ──────────────────────────────────────────────────────────
 
@@ -93,18 +130,39 @@ chrome.runtime.onMessage.addListener(
         _currentStatus = 'word_detected';
         _currentProgress = 0;
 
-        // Check auto-start setting and relay TRIGGER_DRAW if enabled
-        getSettings().then(settings => {
-          if (settings.autoStart && settings.enabled && sender.tab?.id) {
-            chrome.tabs.sendMessage(sender.tab.id, {
-              type: 'TRIGGER_DRAW',
-              word: message.word,
-            }).catch(() => { /* tab may not be ready */ });
-          }
-        });
-
+        // Auto-start is handled directly by the content script (it must await
+        // the async QuickDraw fetch before drawing), so no relay is needed here.
         sendResponse({ ok: true });
-        return true; // async (getSettings is async)
+        return false;
+      }
+
+      // ── Content: FETCH_DRAWINGS ──
+      // The real network fetch is done here in the service worker because it
+      // holds the `storage.googleapis.com` host permission and is exempt from
+      // CORS (a content-script fetch would be blocked by GCS).
+      case 'FETCH_DRAWINGS': {
+        const category = message.category as string;
+        fetchDrawings(category)
+          .then((sketches: QuickDrawSketch[]) => sendResponse(sketches))
+          .catch((err: unknown) => {
+            console.error('[SkribblAutoDraw] Fetch failed in background:', err);
+            sendResponse([]);
+          });
+        return true; // async
+      }
+
+      // ── Content: FETCH_ICON ──
+      // Fallback image source: fetch a real line-art icon for an unknown word
+      // from Iconify (CORS-exempt here) and return its SVG path body.
+      case 'FETCH_ICON': {
+        const query = String(message.query ?? '');
+        fetchIcon(query)
+          .then((icon: IconifyIcon | null) => sendResponse(icon))
+          .catch((err: unknown) => {
+            console.error('[SkribblAutoDraw] Icon fetch failed in background:', err);
+            sendResponse(null);
+          });
+        return true; // async
       }
 
       // ── Content: DRAW_STATUS_UPDATE ──

@@ -11,12 +11,23 @@
  * Between strokes, the pen lifts with a human-like pause (100–400ms).
  */
 
-import type { Point, AnimatedStroke, AnimatedPoint, ExtensionSettings } from '../types/index';
-import { SPEED_PRESETS } from '../types/index';
+import type { Point, AnimatedStroke, AnimatedPoint, ExtensionSettings, SpeedMode } from '../types/index';
 import { catmullRomSpline, computeCurvature } from './spline';
 import { applyJitter } from './jitter';
 import { scaleStroke, getCanvasRect } from './scaler';
 import type { BoundingBox } from '../types/index';
+
+/**
+ * Inline copy of SPEED_PRESETS to avoid sharing a chunk with content.ts.
+ * When injected.js runs in the page's main-world, relative imports
+ * resolve against the page origin, not the extension — so any shared
+ * chunk import breaks silently. Keep this in sync with types/index.ts.
+ */
+const SPEED_PRESETS: Record<SpeedMode, { min: number; max: number }> = {
+  slow: { min: 35, max: 70 },
+  medium: { min: 15, max: 35 },
+  fast: { min: 5, max: 15 },
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -182,12 +193,17 @@ export class AnimationScheduler {
    * @param sketchBounds - Bounding box of the sketch
    * @param settings - Extension settings (speed, jitter)
    * @param callbacks - Progress/completion/error callbacks
+   * @param colors - Optional per-stroke hex color array (index-aligned with strokes)
+   * @param selectColor - Optional callback invoked before each stroke to switch
+   *                       the active Skribbl.io palette color
    */
   async run(
     strokes: Array<{ points: Point[]; duration: number }>,
     sketchBounds: BoundingBox,
     settings: Pick<ExtensionSettings, 'speedMode' | 'jitterAmount'>,
-    callbacks: SchedulerCallbacks = {}
+    callbacks: SchedulerCallbacks = {},
+    colors?: string[],
+    selectColor?: (hex: string) => void
   ): Promise<void> {
     this._cancelled = false;
     this._startTime = performance.now();
@@ -219,6 +235,15 @@ export class AnimationScheduler {
 
       const stroke = animatedStrokes[si];
       if (stroke.points.length === 0) continue;
+
+      // Switch Skribbl.io's active color before this stroke (if color engine active)
+      if (colors && selectColor && colors[si]) {
+        try {
+          selectColor(colors[si]);
+        } catch {
+          /* ignore color-switch failures — drawing continues in current color */
+        }
+      }
 
       // Report progress
       const progress = si / totalStrokes;

@@ -404,6 +404,14 @@ body {
   font-size: 10px;
   color: var(--color-text-dim);
   white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.data-source {
+  font-size: 9px;
+  opacity: 0.8;
 }
 
 /* ── Disabled state (extension off) ──────────────────────────── */
